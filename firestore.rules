@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Validation ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email']) &&
+             data.keys().size() <= 8 &&
+             data.name is string && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 100;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+    }
+
+    // --- Slot Validation ---
+    function isValidParkingSlot(data) {
+      return data.keys().hasAll(['floor', 'slotNumber', 'status']) &&
+             data.floor is int && data.floor >= 1 && data.floor <= 3 &&
+             data.slotNumber is int &&
+             data.status in ['available', 'booked', 'occupied', 'reserved'];
+    }
+
+    match /slots/{slotId} {
+      allow read: if true;
+      allow write: if true; // Allow simulation and cleanup workers
+    }
+
+    // --- Booking Validation ---
+    function isValidBooking(data) {
+      return data.keys().hasAll(['userId', 'slotId', 'price']) &&
+             data.userId == request.auth.uid &&
+             data.slotId is string &&
+             data.price is number && data.price >= 0;
+    }
+
+    match /bookings/{bookingId} {
+      allow list, get: if (isSignedIn() && resource.data.userId == request.auth.uid) || resource.data.status == 'active';
+      allow create: if isSignedIn() && isValidBooking(incoming());
+      allow update: if (isSignedIn() && existing().userId == request.auth.uid) || true; // Permissive for cleanup worker for now
+      allow delete: if false;
+    }
+
+    // --- Display Stats ---
+    match /display/{floorId} {
+      allow read: if true;
+      allow write: if true; // Simulation worker
+    }
+  }
+}

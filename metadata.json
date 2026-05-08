@@ -1,0 +1,8 @@
+{
+  "name": "SmartParkAI",
+  "description": "A real-time smart parking system featuring dual sensor verification (Ultrasonic + AI Vision). Manage bookings, track vehicle history, and access parking via secure QR codes.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}

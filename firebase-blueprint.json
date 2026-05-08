@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "vehicleNumber": { "type": "string" }
+      },
+      "required": ["name", "email"]
+    },
+    "ParkingSlot": {
+      "title": "Parking Slot",
+      "description": "Real-time state of a parking slot",
+      "type": "object",
+      "properties": {
+        "floor": { "type": "integer" },
+        "slotNumber": { "type": "integer" },
+        "label": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "booked", "occupied", "reserved"] },
+        "ultrasonicStatus": { "type": "boolean" },
+        "cameraStatus": { "type": "boolean" },
+        "finalStatus": { "type": "string", "enum": ["available", "occupied", "reserved"] },
+        "pricePerHour": { "type": "number" },
+        "coordinates": { "type": "object" }
+      },
+      "required": ["floor", "slotNumber", "status"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Customer booking records",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "slotId": { "type": "string" },
+        "bookingTime": { "type": "string", "format": "date-time" },
+        "duration": { "type": "integer" },
+        "price": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "qrCode": { "type": "string" },
+        "gateVerified": { "type": "boolean" }
+      },
+      "required": ["userId", "slotId", "price"]
+    },
+    "EntranceDisplay": {
+      "title": "Entrance Display",
+      "description": "Statistics for the entrance board",
+      "type": "object",
+      "properties": {
+        "floor": { "type": "integer" },
+        "totalSlots": { "type": "integer" },
+        "availableSlots": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["floor", "totalSlots", "availableSlots"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "slots/{slotId}": {
+      "schema": "ParkingSlot",
+      "description": "Real-time slot monitoring"
+    },
+    "bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Transaction and access history"
+    },
+    "display/{floorId}": {
+      "schema": "EntranceDisplay",
+      "description": "Real-time entrance statistics"
+    }
+  }
+}
