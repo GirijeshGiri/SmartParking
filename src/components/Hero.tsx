@@ -11,42 +11,42 @@ export default function Hero() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-8 ring-1 ring-blue-100">
               <Zap className="w-3 h-3 fill-current" />
               Advanced Smart Parking System
             </div>
-            <h1 className="text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 leading-[1.1] mb-6">
+            <h1 className="text-6xl lg:text-8xl font-black tracking-tighter text-gray-900 leading-[0.9] mb-8">
               AI-Powered <br />
               <span className="text-blue-600">Parking Solutions</span>
             </h1>
-            <p className="text-lg text-gray-600 mb-10 max-w-lg leading-relaxed">
+            <p className="text-lg text-gray-500 mb-10 max-w-lg leading-relaxed font-medium">
               Experience the future of parking with dual verification using ultrasonic sensors and AI computer vision. Real-time monitoring for maximum efficiency.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-5">
               <a 
                 href="#dashboard" 
-                className="flex items-center justify-center gap-2 bg-primary text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all group shadow-xl shadow-blue-200"
+                className="flex items-center justify-center gap-3 bg-blue-600 text-white px-10 py-5 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-700 transition-all group shadow-2xl shadow-blue-500/40 active:scale-95"
               >
                 Reserve a Slot
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </a>
               <a 
                 href="/display"
-                className="flex items-center justify-center gap-2 border-2 border-gray-200 px-8 py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all"
+                className="flex items-center justify-center gap-3 bg-white text-gray-900 border border-gray-100 px-10 py-5 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-50 transition-all shadow-xl shadow-gray-200/50 active:scale-95"
               >
                 Entrance Board
               </a>
             </div>
             
-            <div className="mt-12 flex items-center gap-6 text-sm text-gray-500 font-medium">
-              <div className="flex items-center gap-2">
-                <div className="bg-emerald-100 p-1.5 rounded-full">
+            <div className="mt-12 flex items-center gap-8 text-[11px] text-gray-400 font-black uppercase tracking-widest">
+              <div className="flex items-center gap-3">
+                <div className="bg-emerald-100 p-2 rounded-lg">
                   <Cpu className="w-4 h-4 text-emerald-600" />
                 </div>
                 Ultrasonic Sensors
               </div>
-              <div className="flex items-center gap-2">
-                <div className="bg-purple-100 p-1.5 rounded-full">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-100 p-2 rounded-lg">
                   <Camera className="w-4 h-4 text-purple-600" />
                 </div>
                 AI Vision
@@ -60,12 +60,12 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="relative"
           >
-            <div className="relative aspect-square rounded-[2rem] overflow-hidden shadow-2xl bg-gray-100 border-8 border-white">
-              <div className="absolute inset-0 bg-blue-600/10 mix-blend-overlay"></div>
+            <div className="relative aspect-square rounded-[3rem] overflow-hidden shadow-[0_32px_128px_-32px_rgba(0,0,0,0.3)] bg-gray-100 group">
+              <div className="absolute inset-0 bg-blue-600/5 mix-blend-overlay"></div>
               <img 
-                src="https://images.unsplash.com/photo-1506521781263-d8422e82f27a?q=80&w=2070&auto=format&fit=crop" 
+                src="https://images.unsplash.com/photo-1545179605-1296651e9d43?q=80&w=2000&auto=format&fit=crop" 
                 alt="Modern Parking Lot" 
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover grayscale-[0.2] group-hover:scale-110 transition-transform duration-1000"
                 referrerPolicy="no-referrer"
               />
               
@@ -73,12 +73,12 @@ export default function Hero() {
               <motion.div 
                 animate={{ y: [0, -10, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute top-8 left-8 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-xl border border-white/20"
+                className="absolute top-8 left-8 bg-white/95 backdrop-blur-md p-6 rounded-[2rem] shadow-2xl border border-white/50"
               >
-                <div className="text-xs font-bold text-gray-400 uppercase mb-1">Live Occupancy</div>
-                <div className="text-2xl font-black text-gray-900">84%</div>
-                <div className="mt-2 text-xs font-medium text-emerald-600 flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Live Occupancy</div>
+                <div className="text-4xl font-black text-gray-900 tracking-tighter">84%</div>
+                <div className="mt-3 text-[10px] font-black text-emerald-500 flex items-center gap-2 uppercase tracking-widest">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                   System Optimal
                 </div>
               </motion.div>
@@ -86,23 +86,26 @@ export default function Hero() {
               <motion.div 
                 animate={{ x: [0, 10, 0] }}
                 transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                className="absolute bottom-12 right-8 bg-gray-900/90 backdrop-blur p-4 rounded-2xl shadow-xl border border-white/10 text-white"
+                className="absolute bottom-12 right-8 bg-[#111827]/95 backdrop-blur-md p-6 rounded-[2rem] shadow-2xl border border-white/10 text-white min-w-[220px]"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
-                    <Camera className="w-5 h-5 text-white" />
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <Camera className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-gray-400 uppercase">AI Verification</div>
-                    <div className="text-sm font-semibold tracking-wide">Vehicle Detected</div>
+                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-0.5">AI Verification</div>
+                    <div className="text-sm font-black tracking-tight uppercase">Vehicle Detected</div>
                   </div>
                 </div>
               </motion.div>
             </div>
             
             {/* Background decorative elements */}
-            <div className="absolute -top-10 -right-10 w-64 h-64 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-            <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] -z-10">
+              <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob"></div>
+              <div className="absolute bottom-0 left-0 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob animation-delay-2000"></div>
+              <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob animation-delay-4000"></div>
+            </div>
           </motion.div>
         </div>
       </div>

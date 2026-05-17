@@ -105,34 +105,40 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.href = '/'}>
-            <div className="bg-primary p-2 rounded-lg">
+            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
               <Car className="text-white w-6 h-6" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-gray-900">SmartParkAI</span>
+            <span className="text-xl font-black tracking-tight text-gray-900">SmartParkAI</span>
           </div>
           
-          <div className="hidden md:flex items-center gap-8 font-medium text-sm text-gray-600">
-            <a href="/#features" className="hover:text-primary transition-colors">Features</a>
-            <a href="/#dashboard" className="hover:text-primary transition-colors">Dashboard</a>
-            <a href="/gate" className="hover:text-primary transition-colors">Gate Entry</a>
-            <a href="/display" className="hover:text-primary transition-colors">Display Board</a>
-            {user && <a href="/bookings" className="hover:text-primary transition-colors">My Bookings</a>}
-            
+          <div className="hidden md:flex items-center gap-8 font-bold text-[13px] uppercase tracking-widest text-gray-500">
+            <a href="/#features" className="hover:text-blue-600 transition-colors">Features</a>
+            <a href="/#dashboard" className="hover:text-blue-600 transition-colors">Dashboard</a>
+            <a href="/gate" className="hover:text-blue-600 transition-colors">Gate Entry</a>
+            <a href="/display" className="hover:text-blue-600 transition-colors">Display Board</a>
+            {user && <a href="/bookings" className="hover:text-blue-600 transition-colors">My Bookings</a>}
+          </div>
+
+          <div className="hidden md:flex items-center">
             {user ? (
               <div className="relative" ref={dropdownRef}>
                 <button 
                   onClick={() => setProfileOpen(!profileOpen)}
-                  className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full border border-gray-100 hover:bg-gray-100 transition-all group"
+                  className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-all group"
                 >
-                  {user.photoURL ? (
-                    <img src={user.photoURL} alt={user.displayName || ''} className="w-6 h-6 rounded-full" />
-                  ) : (
-                    <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4" />
-                    </div>
-                  )}
-                  <span className="text-xs font-bold text-gray-900">{userData?.name || user.displayName?.split(' ')[0] || 'User'}</span>
-                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                  <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-gray-100">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt={user.displayName || ''} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-blue-600 text-white flex items-center justify-center text-xs">
+                        {userData?.name ? userData.name[0].toUpperCase() : (user.displayName?.[0] || 'U')}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-black text-gray-900 uppercase tracking-widest">
+                    {userData?.name || user.displayName || 'User'}
+                  </span>
+                  <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 <AnimatePresence>

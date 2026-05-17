@@ -119,43 +119,43 @@ export default function Home() {
         <Hero />
         
         {/* Simulation Control (Developer View) */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 relative z-20">
-           <div className="bg-gray-900 text-white p-6 rounded-[2rem] shadow-2xl flex flex-wrap items-center justify-between gap-6 overflow-hidden">
-             <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
-                  <Radio className="w-6 h-6 animate-pulse" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-20">
+           <div className="bg-[#0f172a] text-white p-8 rounded-[2.5rem] shadow-[0_32px_128px_-32px_rgba(0,0,0,0.5)] flex flex-wrap items-center justify-between gap-8 border border-white/5 overflow-hidden">
+             <div className="flex items-center gap-6">
+                <div className="w-14 h-14 bg-blue-600/20 rounded-[1.5rem] flex items-center justify-center border border-blue-500/20 shadow-inner">
+                  <Radio className="w-7 h-7 text-blue-500 animate-pulse" />
                 </div>
                 <div>
-                   <h4 className="font-bold">Dual-Sensor Hub</h4>
-                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Live IoT Simulation</p>
+                   <h4 className="text-xl font-black tracking-tight">Dual-Sensor Hub</h4>
+                   <p className="text-[10px] text-blue-500/60 font-black uppercase tracking-[0.2em]">Live IoT Simulation</p>
                 </div>
              </div>
              
-             <div className="flex items-center gap-4">
+             <div className="flex items-center gap-4 flex-1 justify-end">
                 <button 
                   onClick={() => simulateSensor('S1', 'occupied')}
-                  className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold hover:bg-white/10 transition-all flex items-center gap-2"
+                  className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-3 active:scale-95 group"
                 >
-                  <Zap className="w-3 h-3 text-warning" /> Trigger S1 Ultrasonic
+                  <Zap className="w-4 h-4 text-warning fill-warning group-hover:scale-110 transition-transform" /> Trigger S1 Ultrasonic
                 </button>
                 <button 
                   onClick={() => simulateSensor('S3', 'available')}
-                  className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold hover:bg-white/10 transition-all flex items-center gap-2"
+                  className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-3 active:scale-95 group"
                 >
-                  <Camera className="w-3 h-3 text-primary" /> AI Vision Clear S3
+                  <Camera className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" /> AI Vision Clear S3
                 </button>
                 <button 
                   onClick={() => setIsSimulating(!isSimulating)}
-                  className={`px-6 py-3 border rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                  className={`px-8 py-4 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-4 active:scale-95 overflow-hidden relative group ${
                     isSimulating 
-                    ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/20' 
-                    : 'bg-white/10 border-white/20 hover:bg-white/20'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
                   }`}
                 >
-                  <div className={`w-3 h-3 rounded-full ${isSimulating ? 'bg-white animate-ping' : 'bg-gray-500'}`} />
+                  <div className={`w-3 h-3 rounded-full transition-all duration-500 ${isSimulating ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] scale-125' : 'bg-gray-600'}`} />
                   <div className="text-left">
-                    <p className="text-[10px] font-black uppercase opacity-60">Background Hub</p>
-                    <p className="tracking-widest">{isSimulating ? 'SIMULATION ACTIVE' : 'RANDOM ARRIVAL INIT'}</p>
+                    <p className="text-[9px] font-black opacity-40 mb-0.5">Background Hub</p>
+                    <p className="tracking-[0.1em]">{isSimulating ? 'SIMULATION ACTIVE' : 'RANDOM ARRIVAL INIT'}</p>
                   </div>
                 </button>
              </div>
