@@ -4,7 +4,8 @@ import { collection, query, where, orderBy, doc, updateDoc, onSnapshot } from 'f
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import Navbar from '../components/Navbar';
-import { Calendar, Clock, Car, Tag, ChevronRight, AlertCircle, CheckCircle2, XCircle, MapPin, QrCode, X, Download } from 'lucide-react';
+import { Calendar, Clock, Car, Tag, ChevronRight, AlertCircle, CheckCircle2, XCircle, MapPin, QrCode, X, Download, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface Booking {
@@ -20,6 +21,7 @@ interface Booking {
 }
 
 export default function MyBookings() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
@@ -153,6 +155,15 @@ export default function MyBookings() {
       <Navbar />
       
       <main className="max-w-4xl mx-auto px-4 py-12">
+        <button 
+          onClick={() => navigate(-1)}
+          className="mb-8 flex items-center gap-2 text-gray-400 hover:text-gray-900 transition-colors font-black text-[10px] uppercase tracking-widest group"
+        >
+          <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-all">
+            <ArrowLeft className="w-4 h-4" />
+          </div>
+          Back to Previous
+        </button>
         <div className="mb-10">
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}

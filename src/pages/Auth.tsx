@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Car, Smartphone, Zap, Camera, Shield, Phone, Hash } from 'lucide-react';
+import { Car, Smartphone, Zap, Camera, Shield, Phone, Hash, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../lib/firebase';
@@ -7,6 +7,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfi
 import { setDoc, doc, getDoc } from 'firebase/firestore';
 
 export default function Auth() {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,7 +16,6 @@ export default function Auth() {
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
   const handleGoogleLogin = async () => {
     setError('');
@@ -88,7 +88,13 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-screen grid lg:grid-cols-2 relative">
+      <button 
+        onClick={() => navigate('/')}
+        className="absolute top-6 left-6 z-[100] lg:hidden w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-900 border border-gray-100 active:scale-95 transition-all"
+      >
+        <ArrowLeft className="w-5 h-5" />
+      </button>
       {/* Left Side: Illustration & Branding */}
       <div className="hidden lg:flex bg-blue-600 p-12 flex-col justify-between text-white relative overflow-hidden">
         <motion.div 

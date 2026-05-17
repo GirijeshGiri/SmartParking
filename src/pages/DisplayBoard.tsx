@@ -1,10 +1,12 @@
 import { motion } from 'motion/react';
-import { Car, MapPin, ArrowUp, RefreshCcw, Layers } from 'lucide-react';
+import { Car, MapPin, ArrowUp, RefreshCcw, Layers, ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { useNavigate } from 'react-router-dom';
 
 export default function DisplayBoard() {
+  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [stats, setStats] = useState<any[]>([]);
 
@@ -45,15 +47,23 @@ export default function DisplayBoard() {
     <div className="min-h-screen bg-gray-900 text-white font-sans p-10 flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center mb-16 px-6">
-        <div className="flex items-center gap-4">
-          <div className="bg-blue-600 p-4 rounded-[1.5rem] shadow-2xl shadow-blue-500/20">
-            <Car className="w-10 h-10" />
-          </div>
-          <div>
-            <h1 className="text-4xl font-black tracking-tighter">SmartParkAI</h1>
-            <div className="flex items-center gap-2 text-blue-500 font-bold tracking-widest text-sm">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-ping"></div>
-              ENTRANCE DISPLAY SYSTEM
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={() => navigate(-1)}
+            className="p-4 bg-gray-800 rounded-2xl hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-600 p-4 rounded-[1.5rem] shadow-2xl shadow-blue-500/20">
+              <Car className="w-10 h-10" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-black tracking-tighter">SmartParkAI</h1>
+              <div className="flex items-center gap-2 text-blue-500 font-bold tracking-widest text-sm">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-ping"></div>
+                ENTRANCE DISPLAY SYSTEM
+              </div>
             </div>
           </div>
         </div>
