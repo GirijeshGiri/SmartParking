@@ -4,7 +4,7 @@ import { collection, query, where, getDocs, orderBy, doc, updateDoc } from 'fire
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import Navbar from '../components/Navbar';
-import { Calendar, Clock, Car, Tag, ChevronRight, AlertCircle, CheckCircle2, XCircle, MapPin, QrCode, X } from 'lucide-react';
+import { Calendar, Clock, Car, Tag, ChevronRight, AlertCircle, CheckCircle2, XCircle, MapPin, QrCode, X, Download } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface Booking {
@@ -74,6 +74,63 @@ export default function MyBookings() {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `bookings/${booking.id}`);
     }
+  };
+
+  const handleDownloadQR = () => {
+    if (!selectedQR) return;
+    
+    const svgLayer = document.querySelector('#modal-qr svg') as SVGGraphicsElement;
+    if (!svgLayer) return;
+
+    const svgData = new XMLSerializer().serializeToString(svgLayer);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = () => {
+      canvas.width = 600;
+      canvas.height = 800;
+      if (ctx) {
+        // Draw white background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw Header
+        ctx.fillStyle = '#2563eb'; // blue-600
+        ctx.fillRect(0, 0, canvas.width, 100);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('SmartPark AI - Entry Ticket', canvas.width / 2, 60);
+        
+        // Draw QR
+        ctx.drawImage(img, 100, 150, 400, 400);
+        
+        // Draw Info
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText(`Slot: ${selectedQR.slotLabel}`, canvas.width / 2, 600);
+        
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '16px sans-serif';
+        ctx.fillText(`Vehicle: ${selectedQR.vehicleNumber.toUpperCase()}`, canvas.width / 2, 640);
+        ctx.fillText(`Ref: ${selectedQR.id.slice(0, 8)}`, canvas.width / 2, 670);
+        
+        // Watermark/Footer
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Valid for one-time gate entry only', canvas.width / 2, 750);
+        
+        const pngFile = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.download = `ParkAI-Ticket-${selectedQR.slotLabel}.png`;
+        downloadLink.href = pngFile;
+        downloadLink.click();
+      }
+    };
+    
+    img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
   };
 
   if (loading) {
@@ -153,6 +210,7 @@ export default function MyBookings() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-lg font-black text-gray-900">Slot {booking.slotLabel}</span>
+                          <span className="text-[10px] font-bold text-gray-400">#{(booking as any).displayId || booking.id.slice(0, 8)}</span>
                           <div className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
                             booking.status === 'active' ? 'bg-blue-100 text-blue-700' : 
                             booking.status === 'cancelled' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
@@ -161,35 +219,53 @@ export default function MyBookings() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-400 font-medium">
-                          <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {new Date(booking.timestamp).toLocaleDateString()}</span>
+                          <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {new Date(booking.timestamp).toLocaleDateString()} at {new Date(booking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {booking.hours} Hours</span>
-                          <span className="flex items-center gap-1.5 font-bold text-gray-700"><Car className="w-3.5 h-3.5" /> {booking.vehicleNumber}</span>
+                          <span className="flex items-center gap-1.5 font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md"><Car className="w-3.5 h-3.5" /> {booking.vehicleNumber}</span>
+                          {(booking as any).checkedIn && (
+                            <span className="flex items-center gap-1 text-emerald-500 font-black text-[10px] uppercase tracking-wider">
+                              <CheckCircle2 className="w-3 h-3" /> Checked In
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-4 md:pt-0">
+                      {booking.status === 'active' && (
+                        <motion.div 
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => setSelectedQR(booking)}
+                          className="cursor-pointer bg-white p-3 rounded-2xl border-2 border-dashed border-gray-100 hover:border-blue-200 transition-colors shadow-sm relative group/qr"
+                        >
+                          <QRCodeSVG 
+                            value={`PARK-AI:${booking.id}:${booking.slotId}`} 
+                            size={72}
+                            level="M"
+                            className="opacity-90 group-hover/qr:opacity-100"
+                          />
+                          <div className="absolute inset-0 bg-blue-600/0 group-hover/qr:bg-blue-600/5 transition-colors flex items-center justify-center rounded-xl">
+                            <QrCode className="w-4 h-4 text-blue-600 opacity-0 group-hover/qr:opacity-100 transition-opacity" />
+                          </div>
+                        </motion.div>
+                      )}
+
                       <div className="text-right">
                         <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Paid Amount</div>
                         <div className="text-xl font-black text-gray-900">₹{booking.price}</div>
+                        {booking.status === 'active' && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancel(booking);
+                            }}
+                            className="mt-2 text-[10px] font-black text-rose-500 uppercase tracking-widest hover:text-rose-600 underline underline-offset-4"
+                          >
+                            Cancel Booking
+                          </button>
+                        )}
                       </div>
-                      
-                      {booking.status === 'active' && (
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => setSelectedQR(booking)}
-                            className="bg-blue-50 text-blue-600 px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center gap-2"
-                          >
-                            <QrCode className="w-4 h-4" /> QR
-                          </button>
-                          <button 
-                            onClick={() => handleCancel(booking)}
-                            className="bg-rose-50 text-rose-600 px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all shadow-sm"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -232,18 +308,35 @@ export default function MyBookings() {
                 <h3 className="text-2xl font-black text-gray-900 mb-2">Access Ticket</h3>
                 <p className="text-gray-500 text-sm mb-8 font-medium">Scan this at the entry gate of Slot {selectedQR.slotLabel}</p>
 
-                <div className="bg-white p-6 rounded-3xl border-2 border-dashed border-gray-200 inline-block mb-8">
-                  <QRCodeSVG 
-                    value={`BKG-${selectedQR.id}-${selectedQR.slotId}`} 
-                    size={200}
-                    level="H"
-                  />
+                <div id="modal-qr" className="bg-white p-6 rounded-[3rem] border-4 border-gray-50 shadow-inner inline-block mb-4 relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-tr from-blue-600/20 to-purple-600/20 rounded-[3rem] blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative bg-white p-2 rounded-2xl">
+                    <QRCodeSVG 
+                      value={`PARK-AI:${selectedQR.id}:${selectedQR.slotId}`} 
+                      size={200}
+                      level="H"
+                      includeMargin={false}
+                    />
+                  </div>
                 </div>
+
+                <div className="flex justify-center mb-6">
+                   <button 
+                     onClick={handleDownloadQR}
+                     className="flex items-center gap-2 bg-emerald-100 text-emerald-700 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest hover:bg-emerald-200 transition-all border border-emerald-200 shadow-sm"
+                   >
+                     <Download className="w-4 h-4" /> Download Ticket
+                   </button>
+                </div>
+
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-8 animate-pulse">
+                  Ready for Gate Scanner
+                </p>
 
                 <div className="bg-gray-50 p-6 rounded-2xl text-left space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Booking ID</span>
-                    <span className="font-bold text-gray-900">{selectedQR.id}</span>
+                    <span className="font-bold text-gray-900">{(selectedQR as any).displayId || selectedQR.id}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm border-t border-gray-100 pt-4">
                     <span className="text-gray-500 font-medium">Vehicle</span>
@@ -251,7 +344,7 @@ export default function MyBookings() {
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-500 font-medium">Spot Label</span>
-                    <span className="font-bold text-blue-600">A-{selectedQR.slotLabel}</span>
+                    <span className="font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">{selectedQR.slotLabel}</span>
                   </div>
                 </div>
               </div>

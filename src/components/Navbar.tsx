@@ -1,8 +1,8 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { Car, Menu, X, LogOut, User, Phone, Hash, ChevronDown } from 'lucide-react';
+import { Car, Menu, X, LogOut, User, Phone, Hash, ChevronDown, Edit3, Save, XCircle } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User as FirebaseUser, updateProfile } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 export default function Navbar() {
@@ -57,13 +57,31 @@ export default function Navbar() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    if (!editForm.name.trim()) {
+      alert('Please enter your name');
+      return;
+    }
     setSaving(true);
     try {
+      // Update Firestore
       await updateDoc(doc(db, 'users', user.uid), {
-        ...editForm,
+        name: editForm.name,
+        phone: editForm.phone,
+        vehicleNumber: editForm.vehicleNumber.toUpperCase(),
         updatedAt: new Date().toISOString()
       });
-      setUserData({ ...userData, ...editForm });
+
+      // Update Firebase Auth profile if name changed
+      if (editForm.name !== user.displayName) {
+        await updateProfile(user, { displayName: editForm.name });
+      }
+
+      setUserData({ 
+        ...userData, 
+        name: editForm.name,
+        phone: editForm.phone,
+        vehicleNumber: editForm.vehicleNumber.toUpperCase()
+      });
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -71,6 +89,15 @@ export default function Navbar() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setEditForm({
+      name: userData?.name || user?.displayName || '',
+      phone: userData?.phone || '',
+      vehicleNumber: userData?.vehicleNumber || ''
+    });
+    setIsEditing(false);
   };
 
   return (
@@ -128,9 +155,13 @@ export default function Navbar() {
                         </div>
                         {!isEditing && (
                           <button 
-                            onClick={() => setIsEditing(true)}
-                            className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-700 underline underline-offset-4"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsEditing(true);
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-700 underline underline-offset-4 bg-blue-50 px-2 py-1 rounded-lg"
                           >
+                            <Edit3 className="w-3 h-3" />
                             Edit
                           </button>
                         )}
@@ -138,50 +169,68 @@ export default function Navbar() {
 
                       <div className="space-y-4 p-1">
                         {isEditing ? (
-                          <>
+                          <div className="space-y-4">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
+                              <div className="flex items-center gap-2 mb-1">
+                                <User className="w-3 h-3 text-gray-400" />
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Full Name</label>
+                              </div>
                               <input 
                                 type="text"
                                 value={editForm.name}
                                 onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                                placeholder="Your name"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mobile</label>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Phone className="w-3 h-3 text-gray-400" />
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mobile Number</label>
+                              </div>
                               <input 
                                 type="tel"
                                 value={editForm.phone}
                                 onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                                placeholder="+91 00000 00000"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Vehicle No</label>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Hash className="w-3 h-3 text-gray-400" />
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Vehicle Number</label>
+                              </div>
                               <input 
                                 type="text"
                                 value={editForm.vehicleNumber}
                                 onChange={(e) => setEditForm({...editForm, vehicleNumber: e.target.value})}
-                                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase"
+                                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase font-bold"
+                                placeholder="KA 01 AB 1234"
                               />
                             </div>
                             <div className="flex gap-2 pt-2">
                               <button 
-                                onClick={() => setIsEditing(false)}
-                                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all"
+                                onClick={handleCancelEdit}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all border border-gray-200"
                               >
+                                <XCircle className="w-4 h-4" />
                                 Cancel
                               </button>
                               <button 
                                 onClick={handleSaveProfile}
                                 disabled={saving}
-                                className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-50"
+                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50"
                               >
-                                {saving ? 'Saving...' : 'Save Details'}
+                                {saving ? (
+                                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                  <Save className="w-4 h-4" />
+                                )}
+                                {saving ? 'Saving...' : 'Save'}
                               </button>
                             </div>
-                          </>
+                          </div>
                         ) : (
                           <>
                             <div className="flex items-center gap-3 text-sm">

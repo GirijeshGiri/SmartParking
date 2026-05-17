@@ -7,7 +7,13 @@ import {
   browserPopupRedirectResolver,
   indexedDBLocalPersistence
 } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  doc, 
+  getDocFromServer,
+  persistentLocalCache,
+  persistentMultipleTabManager
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -18,7 +24,13 @@ export const auth = initializeAuth(app, {
   popupRedirectResolver: browserPopupRedirectResolver
 });
 
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId); 
+// Use initializeFirestore to provide explicit settings that can mitigate BloomFilter errors
+// The BloomFilter error often occurs due to issues with the persistent cache in certain SDK versions.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+}, (firebaseConfig as any).firestoreDatabaseId); 
 
 // Connection test as per instructions
 async function testConnection() {

@@ -4,11 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, CheckCircle2, XCircle, QrCode, RefreshCcw, Car, ArrowLeft, Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { updateDoc, doc, collection, query, where, getDocs, writeBatch, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { updateDoc, doc, collection, query, where, getDocs, getDoc, writeBatch, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 export default function GateScanner() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'success' | 'failed' | 'opening'>('idle');
+  const [status, setStatus] = useState<'idle' | 'scanning' | 'verifying' | 'success' | 'failed' | 'opening'>('idle');
+  const statusRef = useRef(status);
+  
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
   const [bookingData, setBookingData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [selectedSlotId, setSelectedSlotId] = useState<string>('S1');
@@ -191,27 +196,44 @@ export default function GateScanner() {
     }
   };
 
-  const tick = () => {
-    if (status !== 'scanning') return;
-    
-    if (videoRef.current?.readyState === videoRef.current?.HAVE_ENOUGH_DATA && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      
-      if (context) {
-        canvas.height = video.videoHeight;
-        canvas.width = video.videoWidth;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "dontInvert",
-        });
+  const lastScanTime = useRef<number>(0);
+  const scanInterval = 300; // Scan every 300ms for performance
 
-        if (code) {
-          stopCamera();
-          handleSuccess(code.data);
-          return;
+  const tick = (time: number) => {
+    if (statusRef.current !== 'scanning') return;
+    
+    if (time - lastScanTime.current > scanInterval) {
+      lastScanTime.current = time;
+      
+      if (videoRef.current?.readyState === videoRef.current?.HAVE_ENOUGH_DATA && canvasRef.current) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        
+        if (context) {
+          // Cap canvas size for performance on high-res mobile cameras
+          const MAX_SIZE = 1200;
+          let scale = 1;
+          if (video.videoWidth > MAX_SIZE || video.videoHeight > MAX_SIZE) {
+            scale = MAX_SIZE / Math.max(video.videoWidth, video.videoHeight);
+          }
+          
+          if (canvas.width !== video.videoWidth * scale || canvas.height !== video.videoHeight * scale) {
+            canvas.width = video.videoWidth * scale;
+            canvas.height = video.videoHeight * scale;
+          }
+          
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "attemptBoth",
+          });
+
+          if (code && code.data) {
+            setStatus('verifying');
+            handleSuccess(code.data);
+            return;
+          }
         }
       }
     }
@@ -220,15 +242,70 @@ export default function GateScanner() {
 
   const handleSuccess = async (data: string) => {
     console.log("QR Code detected:", data);
-    setStatus('scanning'); 
     
     try {
-      if (data.startsWith('BKG-')) {
+      if (data.startsWith('PARK-AI:')) {
+        const parts = data.split(':');
+        if (parts.length < 3) throw new Error("Invalid format detected");
+        
+        const bookingDocId = parts[1];
+        const slotId = parts[2];
+
+        console.log(`Verifying Booking Doc: ${bookingDocId} for Slot: ${slotId}`);
+
+        const bookingDocRef = doc(db, 'bookings', bookingDocId);
+        const bookingSnapshot = await getDoc(bookingDocRef);
+
+        if (bookingSnapshot.exists()) {
+          const booking = bookingSnapshot.data();
+          
+          if (booking.status !== 'active') {
+            throw new Error(`This booking is currently ${booking.status}.`);
+          }
+
+          if (booking.slotId !== slotId) {
+            throw new Error("Mismatched security keys. Spot allocation error.");
+          }
+
+          const batch = writeBatch(db);
+          
+          batch.update(bookingDocRef, {
+            checkedIn: true,
+            checkInTime: serverTimestamp(),
+            status: 'completed' // Mark as completed once checked in
+          });
+
+          batch.update(doc(db, 'slots', slotId), {
+            status: 'occupied',
+            finalStatus: 'occupied',
+            lastGateCheck: serverTimestamp()
+          });
+
+          await batch.commit();
+          stopCamera();
+
+          setBookingData({
+            id: booking.displayId || bookingDocId.slice(0, 8),
+            slotLabel: booking.slotLabel || slotId,
+            vehicleNumber: booking.vehicleNumber || 'NOT PROVIDED',
+            floor: booking.slotLabel?.split('-')[0] || '1',
+            checkIn: new Date().toLocaleTimeString()
+          });
+          
+          setStatus('success');
+          setTimeout(() => setStatus('opening'), 1500);
+          setTimeout(() => {
+            setStatus('idle');
+            setBookingData(null);
+          }, 8000);
+        } else {
+          throw new Error("Security verification failed. Booking record not found in system.");
+        }
+      } else if (data.startsWith('BKG-')) {
+        // Fallback for older QR codes
         const parts = data.split('-');
         const bookingId = `${parts[1]}-${parts[2]}`;
         const slotId = parts[3];
-
-        console.log(`Verifying Booking: ${bookingId} for Slot: ${slotId}`);
 
         const q = query(collection(db, 'bookings'), 
           where('id', '==', bookingId), 
@@ -240,25 +317,19 @@ export default function GateScanner() {
           const bookingDoc = snapshot.docs[0];
           const booking = bookingDoc.data();
           
-          if (booking.slotId !== slotId) {
-            throw new Error("Slot ID mismatch in QR data.");
-          }
-
           const batch = writeBatch(db);
-          
           batch.update(doc(db, 'bookings', bookingDoc.id), {
             checkedIn: true,
+            status: 'completed',
             checkInTime: serverTimestamp(),
           });
-
           batch.update(doc(db, 'slots', slotId), {
             status: 'occupied',
-            finalStatus: 'occupied',
-            lastGateCheck: serverTimestamp()
+            finalStatus: 'occupied'
           });
-
           await batch.commit();
 
+          stopCamera();
           setBookingData({
             id: bookingId,
             slotLabel: booking.slotLabel || slotId,
@@ -266,30 +337,24 @@ export default function GateScanner() {
             floor: booking.slotLabel?.split('-')[0] || '1',
             checkIn: new Date().toLocaleTimeString()
           });
-          
           setStatus('success');
-          
           setTimeout(() => setStatus('opening'), 1500);
-
           setTimeout(() => {
             setStatus('idle');
             setBookingData(null);
           }, 8000);
         } else {
-          setErrorMessage("Booking not found or already used/expired.");
-          setStatus('failed');
-          setTimeout(() => setStatus('idle'), 4000);
+          throw new Error("Old format booking already used or expired.");
         }
       } else {
-        setErrorMessage("Invalid QR Code Format. Please use a SmartParkAI Booking QR.");
-        setStatus('failed');
-        setTimeout(() => setStatus('idle'), 4000);
+        throw new Error("Unrecognized QR signature. Please use official SmartParkAI codes.");
       }
     } catch (err: any) {
-      console.error(err);
+      console.error("Verification Error:", err);
+      stopCamera();
       setErrorMessage(err.message || "An error occurred during verification.");
       setStatus('failed');
-      setTimeout(() => setStatus('idle'), 4000);
+      setTimeout(() => setStatus('idle'), 5000);
     }
   };
 
@@ -312,7 +377,22 @@ export default function GateScanner() {
 
         <div className="flex items-center justify-center gap-3 mb-12">
           <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Car className="w-7 h-7 text-white" />
+            <motion.div
+              animate={status === 'success' || status === 'opening' ? { 
+                scale: [1, 1.2, 1],
+                x: [0, 3, -3, 0],
+                rotate: [0, -5, 5, 0]
+              } : status === 'verifying' ? {
+                y: [0, -2, 0],
+              } : {}}
+              transition={{ 
+                duration: 0.5, 
+                repeat: status === 'verifying' ? Infinity : 0,
+                ease: "easeInOut"
+              }}
+            >
+              <Car className="w-7 h-7 text-white" />
+            </motion.div>
           </div>
           <div>
             <span className="text-2xl font-black tracking-tight text-white block">SmartParkAI</span>
@@ -352,37 +432,48 @@ export default function GateScanner() {
             </div>
           )}
 
-          {(status === 'scanning' || aiAnalysisStatus === 'capturing' || aiAnalysisStatus === 'analyzing') && (
+          {(status === 'scanning' || status === 'verifying' || aiAnalysisStatus === 'capturing' || aiAnalysisStatus === 'analyzing') && (
             <div className="absolute inset-0">
               <video ref={videoRef} className="w-full h-full object-cover opacity-80" />
               <canvas ref={canvasRef} className="hidden" />
               
-              {(status === 'scanning') && (
+              {(status === 'scanning' || status === 'verifying') && (
                 <>
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-64 h-64 border-2 border-white/20 rounded-3xl relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl" />
-                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl" />
-                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl" />
-                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl" />
+                      {/* Scanning Corners */}
+                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
                       
+                      {/* Scanning Line */}
                       <motion.div 
-                        animate={{ top: ['0%', '100%', '0%'] }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                        className="absolute inset-x-0 h-1 bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,1)]"
+                        animate={{ top: ['10%', '90%', '10%'] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-x-4 h-0.5 bg-blue-500 opacity-80 shadow-[0_0_20px_rgba(59,130,246,1)] z-10"
                       />
-                      <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
+                      
+                      {/* Center Pulse Area */}
+                      <div className="absolute inset-4 bg-blue-500/5 animate-pulse rounded-2xl" />
                     </div>
                   </div>
 
                   <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-full text-center px-8">
-                    <p className="text-white font-bold text-sm bg-black/40 backdrop-blur-md py-3 rounded-2xl border border-white/5">
-                      Position QR Code inside the box
+                    <p className="text-white font-black text-[10px] uppercase tracking-[0.2em] bg-black/60 backdrop-blur-md py-4 px-6 rounded-2xl border border-white/10 shadow-2xl">
+                      {status === 'verifying' ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                          Processing Security Keys...
+                        </span>
+                      ) : (
+                        "Center QR Code in Frame"
+                      )}
                     </p>
                   </div>
 
-                  <div className="absolute top-8 left-1/2 -translate-x-1/2 bg-blue-600/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg border border-white/10">
-                    Awaiting Signature
+                  <div className="absolute top-8 left-1/2 -translate-x-1/2 bg-blue-600/90 backdrop-blur-md text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.3em] shadow-2xl border border-white/20">
+                    Active Scanner
                   </div>
                 </>
               )}
@@ -416,7 +507,7 @@ export default function GateScanner() {
                 >
                   <CheckCircle2 className="w-28 h-28 mb-8 drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]" />
                 </motion.div>
-                <h2 className="text-4xl font-black mb-6 tracking-tight">VERIFIED</h2>
+                <h2 className="text-4xl font-black mb-6 tracking-tight text-center">Entry Verified ✅</h2>
                 
                 <div className="bg-black/20 backdrop-blur-xl p-6 rounded-3xl w-full border border-white/10 space-y-4">
                   <div className="flex justify-between items-center group/field">
