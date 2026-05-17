@@ -5,9 +5,20 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { GoogleGenAI, Type } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Gemini
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 // Load Firebase config
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf-8'));
@@ -71,6 +82,50 @@ async function startServer() {
   app.post('/api/maintenance/cleanup', async (req, res) => {
     await checkExpiredBookings();
     res.json({ status: 'success', message: 'Cleanup triggered' });
+  });
+
+  app.post('/api/verify-vehicle', async (req, res) => {
+    try {
+      const { image } = req.body; // Expecting base64 string without prefix
+
+      if (!image) {
+        return res.status(400).json({ error: 'Image is required' });
+      }
+
+      console.log('[AI] Analyzing parking slot for vehicle occupancy...');
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          {
+            text: "Analyze this image of a parking slot. Is there a vehicle (car, truck, motorcycle) parked in the slot? Return only a JSON object with a single boolean field 'isVehiclePresent'.",
+          },
+          {
+            inlineData: {
+              data: image,
+              mimeType: "image/jpeg",
+            },
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              isVehiclePresent: { type: Type.BOOLEAN },
+            },
+            required: ["isVehiclePresent"],
+          },
+        }
+      });
+
+      const result = JSON.parse(response.text);
+      console.log(`[AI] Detection result: ${result.isVehiclePresent ? 'Occupied' : 'Available'}`);
+      res.json(result);
+    } catch (error) {
+      console.error('[AI] Error analyzing image:', error);
+      res.status(500).json({ error: 'AI analysis failed' });
+    }
   });
 
   // Vite middleware for development

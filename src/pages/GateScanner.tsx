@@ -1,16 +1,170 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, CheckCircle2, XCircle, QrCode, RefreshCcw, Car } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Camera, CheckCircle2, XCircle, QrCode, RefreshCcw, Car, ArrowLeft, Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { updateDoc, doc, collection, query, where, getDocs, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { updateDoc, doc, collection, query, where, getDocs, writeBatch, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 export default function GateScanner() {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<'idle' | 'scanning' | 'success' | 'failed' | 'opening'>('idle');
   const [bookingData, setBookingData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('S1');
+  const [manualProcessing, setManualProcessing] = useState(false);
+  const [currentSlotStatus, setCurrentSlotStatus] = useState<string>('loading...');
+  const [aiAnalysisStatus, setAiAnalysisStatus] = useState<'idle' | 'capturing' | 'analyzing' | 'done'>('idle');
+  const [aiResult, setAiResult] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const handleAIVerification = async () => {
+    setAiAnalysisStatus('capturing');
+    setAiResult(null);
+    setErrorMessage('');
+
+    try {
+      // 1. Ensure camera is on if it's not already (though usually it will be idle)
+      let stream: MediaStream;
+      if (!videoRef.current?.srcObject) {
+         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+         if (videoRef.current) {
+           videoRef.current.srcObject = stream;
+           videoRef.current.setAttribute("playsinline", "true");
+           await videoRef.current.play();
+         }
+      } else {
+         stream = videoRef.current.srcObject as MediaStream;
+      }
+
+      // Small delay to ensure camera is ready/adjusted
+      await new Promise(r => setTimeout(r, 1000));
+
+      // 2. Capture frame
+      if (!canvasRef.current || !videoRef.current) throw new Error("Hardware reference lost");
+      
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Canvas context failed");
+      
+      ctx.drawImage(video, 0, 0);
+      const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+      setAiAnalysisStatus('analyzing');
+
+      // 3. Call Gemini AI via server
+      const response = await fetch('/api/verify-vehicle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image })
+      });
+
+      if (!response.ok) throw new Error("AI Analysis request failed");
+      
+      const { isVehiclePresent } = await response.json();
+      const newStatus = isVehiclePresent ? 'occupied' : 'available';
+
+      // 4. Update Firestore
+      await updateDoc(doc(db, 'slots', selectedSlotId), {
+        status: newStatus,
+        finalStatus: newStatus,
+        lastGateCheck: serverTimestamp(),
+      });
+
+      setAiResult(isVehiclePresent ? "Vehicle Detected ✅" : "No Vehicle Found ❌");
+      setAiAnalysisStatus('done');
+
+      // Cleanup
+      if (!status.includes('scanning')) {
+        stopCamera();
+      }
+
+      // Reset after 3 seconds
+      setTimeout(() => {
+        setAiAnalysisStatus('idle');
+        setAiResult(null);
+      }, 3000);
+
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage("AI Verification Failed: " + (err.message || "Unknown error"));
+      setAiAnalysisStatus('idle');
+      stopCamera();
+    }
+  };
+
+  useEffect(() => {
+    // Set up a real-time listener for the selected slot status
+    const slotDocRef = doc(db, 'slots', selectedSlotId);
+    const unsubscribe = onSnapshot(slotDocRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setCurrentSlotStatus(data.status || 'unknown');
+      } else {
+        setCurrentSlotStatus('not found');
+      }
+    }, (error) => {
+      console.error("Error listening to slot status:", error);
+      handleFirestoreError(error, OperationType.GET, `slots/${selectedSlotId}`);
+    });
+
+    return () => unsubscribe();
+  }, [selectedSlotId]);
+
+  const manualSlots = [
+    { id: 'S1', label: 'A-01' },
+    { id: 'S2', label: 'A-02' },
+    { id: 'S3', label: 'A-03' },
+    { id: 'S4', label: 'A-04' },
+    { id: 'S5', label: 'A-05' },
+    { id: 'S6', label: 'A-06' },
+    { id: 'S7', label: 'A-07' },
+    { id: 'S8', label: 'A-08' },
+    { id: 'S9', label: 'A-09' },
+    { id: 'S10', label: 'A-10' },
+    { id: 'S11', label: 'A-11' },
+    { id: 'S12', label: 'A-12' },
+  ];
+
+  const handleManualVerification = async (isOccupied: boolean) => {
+    setManualProcessing(true);
+    try {
+      const status = isOccupied ? 'occupied' : 'available';
+      await updateDoc(doc(db, 'slots', selectedSlotId), {
+        status: status,
+        finalStatus: status,
+        lastGateCheck: serverTimestamp(),
+      });
+      
+      if (isOccupied) {
+        setStatus('success');
+        setBookingData({
+          id: 'MANUAL-ENTRY',
+          slotLabel: manualSlots.find(s => s.id === selectedSlotId)?.label || selectedSlotId,
+          vehicleNumber: 'MANUAL VERIFY',
+          floor: '1',
+          checkIn: new Date().toLocaleTimeString()
+        });
+        setTimeout(() => setStatus('opening'), 1500);
+        setTimeout(() => {
+          setStatus('idle');
+          setBookingData(null);
+        }, 6000);
+      } else {
+        // Just show a brief success if marking as available
+        alert(`Slot ${selectedSlotId} marked as Available`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.UPDATE, `slots/${selectedSlotId}`);
+    } finally {
+      setManualProcessing(false);
+    }
+  };
 
   const startScanner = async () => {
     setStatus('scanning');
@@ -146,6 +300,16 @@ export default function GateScanner() {
       </div>
 
       <div className="max-w-md w-full relative z-10">
+        <button 
+          onClick={() => navigate(-1)}
+          className="mb-8 flex items-center gap-2 text-white/50 hover:text-white transition-colors font-black text-[10px] uppercase tracking-widest group"
+        >
+          <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-all">
+            <ArrowLeft className="w-4 h-4" />
+          </div>
+          Return to Dashboard
+        </button>
+
         <div className="flex items-center justify-center gap-3 mb-12">
           <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
             <Car className="w-7 h-7 text-white" />
@@ -169,43 +333,72 @@ export default function GateScanner() {
               <div>
                 <h3 className="text-2xl font-black text-white mb-3">Entrance Monitor</h3>
                 <p className="text-gray-400 text-sm leading-relaxed px-4">
-                  Please scan your booking QR code to initiate gate activation.
+                  Please scan your booking QR code from your app's "My Bookings" section to initiate gate activation.
                 </p>
               </div>
-              <button 
-                onClick={startScanner}
-                className="bg-blue-600 text-white px-10 py-5 rounded-2xl font-black text-lg hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 active:scale-95 flex items-center gap-3"
-              >
-                <Camera className="w-6 h-6" />
-                Scan QR Code
-              </button>
+              <div className="flex flex-col gap-3 w-full px-10">
+                <button 
+                  onClick={startScanner}
+                  className="bg-blue-600 text-white w-full py-5 rounded-2xl font-black text-lg hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 active:scale-95 flex items-center justify-center gap-3"
+                >
+                  <Camera className="w-6 h-6" />
+                  Open Scanner
+                </button>
+                <div className="flex items-center gap-2 justify-center py-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] font-black text-emerald-500/60 uppercase tracking-[0.2em]">Ready for Verification</span>
+                </div>
+              </div>
             </div>
           )}
 
-          {status === 'scanning' && (
+          {(status === 'scanning' || aiAnalysisStatus === 'capturing' || aiAnalysisStatus === 'analyzing') && (
             <div className="absolute inset-0">
               <video ref={videoRef} className="w-full h-full object-cover opacity-80" />
               <canvas ref={canvasRef} className="hidden" />
               
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-64 h-64 border-2 border-white/20 rounded-3xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl" />
-                  <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl" />
-                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl" />
-                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl" />
-                  
-                  <motion.div 
-                    animate={{ top: ['0%', '100%', '0%'] }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-x-0 h-1 bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,1)]"
-                  />
-                  <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
-                </div>
-              </div>
+              {(status === 'scanning') && (
+                <>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-64 h-64 border-2 border-white/20 rounded-3xl relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl" />
+                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl" />
+                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl" />
+                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl" />
+                      
+                      <motion.div 
+                        animate={{ top: ['0%', '100%', '0%'] }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-x-0 h-1 bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,1)]"
+                      />
+                      <div className="absolute inset-0 bg-blue-500/5 animate-pulse" />
+                    </div>
+                  </div>
 
-              <div className="absolute top-8 left-1/2 -translate-x-1/2 bg-blue-600/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg border border-white/10">
-                Awaiting Signature
-              </div>
+                  <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-full text-center px-8">
+                    <p className="text-white font-bold text-sm bg-black/40 backdrop-blur-md py-3 rounded-2xl border border-white/5">
+                      Position QR Code inside the box
+                    </p>
+                  </div>
+
+                  <div className="absolute top-8 left-1/2 -translate-x-1/2 bg-blue-600/90 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg border border-white/10">
+                    Awaiting Signature
+                  </div>
+                </>
+              )}
+
+              {(aiAnalysisStatus === 'capturing' || aiAnalysisStatus === 'analyzing') && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
+                   <div className="text-center">
+                      <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                        <Camera className="w-10 h-10 text-white" />
+                      </div>
+                      <p className="text-white font-black text-xl uppercase tracking-widest">
+                        {aiAnalysisStatus === 'capturing' ? 'Aligning Vehicle...' : 'AI Processing...'}
+                      </p>
+                   </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -312,6 +505,19 @@ export default function GateScanner() {
               </motion.div>
             )}
           </AnimatePresence>
+          
+          {/* Scanner Close Button */}
+          {status === 'scanning' && (
+            <button 
+              onClick={() => {
+                stopCamera();
+                setStatus('idle');
+              }}
+              className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-rose-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-rose-500 transition-all active:scale-95 z-40 flex items-center gap-2"
+            >
+              <XCircle className="w-4 h-4" /> Cancel Scan
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -329,8 +535,88 @@ export default function GateScanner() {
             <div className="text-white font-black text-lg">ENFORCED</div>
           </div>
         </div>
+
+        {/* Manual Gate Entry Verification */}
+        <div className="mt-8 bg-white/5 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 relative overflow-hidden">
+           <div className="flex items-center gap-4 mb-6">
+              <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-400">
+                <RefreshCcw className="w-5 h-5" />
+              </div>
+              <div>
+                 <h4 className="font-bold text-white">Manual Verification</h4>
+                 <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Entry Override Hub</p>
+              </div>
+           </div>
+
+           <div className="space-y-6">
+              <div className="flex justify-between items-end mb-1">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Select Parking Slot</label>
+                  <select 
+                    value={selectedSlotId}
+                    onChange={(e) => setSelectedSlotId(e.target.value)}
+                    className="w-full bg-gray-950 border border-white/10 rounded-2xl py-4 px-6 text-white font-bold appearance-none focus:border-blue-500 transition-all outline-none min-w-[200px]"
+                  >
+                    {manualSlots.map(slot => (
+                      <option key={slot.id} value={slot.id}>{slot.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-right pb-1">
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Live Status</span>
+                  <span className={`text-xs font-black uppercase tracking-tighter px-3 py-1 rounded-full border ${
+                    currentSlotStatus === 'occupied' 
+                      ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' 
+                      : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                  }`}>
+                    {currentSlotStatus}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <button 
+                  disabled={manualProcessing || aiAnalysisStatus !== 'idle'}
+                  onClick={handleAIVerification}
+                  className="bg-emerald-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                 >
+                   {aiAnalysisStatus === 'analyzing' ? (
+                     <Loader2 className="w-4 h-4 animate-spin" />
+                   ) : (
+                     <Camera className="w-4 h-4" />
+                   )}
+                   {aiAnalysisStatus === 'capturing' ? 'Capturing...' : 
+                    aiAnalysisStatus === 'analyzing' ? 'Analyzing...' : 'Verify Vehicle'}
+                 </button>
+                 <button 
+                  disabled={manualProcessing || aiAnalysisStatus !== 'idle'}
+                  onClick={() => handleManualVerification(false)}
+                  className="bg-rose-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-500 transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                 >
+                   No Vehicle
+                 </button>
+              </div>
+              
+              <AnimatePresence>
+                {aiResult && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className={`p-4 rounded-2xl text-center font-black text-sm uppercase tracking-widest border ${
+                      aiResult.includes('Detected') 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}
+                  >
+                    {aiResult}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+           </div>
+        </div>
         
-        <p className="mt-12 text-center text-[10px] font-black text-gray-600 uppercase tracking-[0.4em]">
+        <p className="mt-8 text-center text-[10px] font-black text-gray-600 uppercase tracking-[0.4em]">
           Secure Infrastructure By SmartParkAI
         </p>
       </div>
