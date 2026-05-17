@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import Navbar from '../components/Navbar';
@@ -26,33 +26,37 @@ export default function MyBookings() {
   const [selectedQR, setSelectedQR] = useState<Booking | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    let unsubscribeBookings: (() => void) | undefined;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
-        fetchBookings(u.uid);
+        // Setup real-time listener for bookings
+        const q = query(
+          collection(db, 'bookings'),
+          where('userId', '==', u.uid),
+          orderBy('timestamp', 'desc')
+        );
+
+        unsubscribeBookings = onSnapshot(q, (snapshot) => {
+          const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+          setBookings(docs);
+          setLoading(false);
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'bookings');
+          setLoading(false);
+        });
       } else {
+        setBookings([]);
         setLoading(false);
       }
     });
-    return () => unsubscribe();
-  }, []);
 
-  const fetchBookings = async (uid: string) => {
-    try {
-      const q = query(
-        collection(db, 'bookings'),
-        where('userId', '==', uid),
-        orderBy('timestamp', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
-      setBookings(docs);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'bookings');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeBookings) unsubscribeBookings();
+    };
+  }, []);
 
   const handleCancel = async (booking: Booking) => {
     if (!window.confirm('Are you sure you want to cancel this booking?')) return;
